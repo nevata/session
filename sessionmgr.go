@@ -62,22 +62,13 @@ func (mgr *sessionmgr) generateSessionID() string {
 	return sid
 }
 
-func (mgr *sessionmgr) EraseSession(userID interface{}, isAdmin bool) {
+func (mgr *sessionmgr) EraseSession(userID string) {
 	mgr.mLock.Lock()
 	defer mgr.mLock.Unlock()
-
-	for sid, session := range mgr.mSessions {
-		if uid, ok := session.mValue["userid"]; ok && (uid == userID) {
-			admin, ok := session.mValue["admin"]
-			if ok && admin.(bool) && isAdmin {
-				delete(mgr.mSessions, sid)
-				return
-			}
-
-			if (!ok || !admin.(bool)) && !isAdmin {
-				delete(mgr.mSessions, sid)
-				return
-			}
+	for sid, sess := range mgr.mSessions {
+		if sess.mUserID == userID {
+			delete(mgr.mSessions, sid)
+			return
 		}
 	}
 }

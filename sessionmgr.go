@@ -32,6 +32,7 @@ func SessionMgr() *sessionmgr {
 	return ins
 }
 
+//gc 删除超时的session
 func (mgr *sessionmgr) gc() {
 	mgr.mLock.Lock()
 	defer mgr.mLock.Unlock()
@@ -47,6 +48,7 @@ func (mgr *sessionmgr) gc() {
 	})
 }
 
+//generateSessionID 生成sessionID
 func (mgr *sessionmgr) generateSessionID() string {
 	var p1, p2, p3 int
 	var sid string
@@ -62,6 +64,7 @@ func (mgr *sessionmgr) generateSessionID() string {
 	return sid
 }
 
+//EraseSession 结束session，用于踢除重复登录的用户
 func (mgr *sessionmgr) EraseSession(userID string) {
 	mgr.mLock.Lock()
 	defer mgr.mLock.Unlock()
@@ -71,6 +74,14 @@ func (mgr *sessionmgr) EraseSession(userID string) {
 			return
 		}
 	}
+}
+
+//EndSessionBy 结束session
+func (mgr *sessionmgr) EndSession(sessionID string) {
+	mgr.mLock.Lock()
+	defer mgr.mLock.Unlock()
+
+	delete(mgr.mSessions, sessionID)
 }
 
 //StartSession 创建session
@@ -88,6 +99,7 @@ func (mgr *sessionmgr) StartSession(w http.ResponseWriter, r *http.Request, user
 	return session
 }
 
+//GetSession 获取session，并更新最后访问时间
 func (mgr *sessionmgr) GetSession(w http.ResponseWriter, r *http.Request) *Session {
 	mgr.mLock.Lock()
 	defer mgr.mLock.Unlock()
@@ -103,5 +115,6 @@ func (mgr *sessionmgr) GetSession(w http.ResponseWriter, r *http.Request) *Sessi
 		return nil
 	}
 
+	session.mLastTimeAccessed = time.Now()
 	return session
 }

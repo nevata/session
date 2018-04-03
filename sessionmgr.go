@@ -116,5 +116,7 @@ func (mgr *sessionmgr) GetSession(w http.ResponseWriter, r *http.Request) *Sessi
 	}
 
 	session.mLastTimeAccessed = time.Now()
+	cookie.MaxAge = mgr.mMaxLifeTime
+	http.SetCookie(w, cookie)
 	return session
 }

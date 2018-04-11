@@ -1,10 +1,12 @@
 package session
 
 import (
+	"encoding/base64"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,8 +28,8 @@ func SessionMgr() *sessionmgr {
 		ins.mCookieName = "sid"
 		ins.mMaxLifeTime = 3600
 		ins.mSessions = make(map[string]*Session)
-		ins.gc()
 		rand.Seed(time.Now().UnixNano())
+		go ins.gc()
 	})
 	return ins
 }
@@ -93,9 +95,6 @@ func (mgr *sessionmgr) StartSession(w http.ResponseWriter, r *http.Request, user
 	session := &Session{mSessionID: sid, mUserID: userID, mLastTimeAccessed: time.Now(), mValue: make(map[string]interface{})}
 	mgr.mSessions[sid] = session
 
-	cookie := http.Cookie{Name: mgr.mCookieName, Value: sid, Path: "/", HttpOnly: true, MaxAge: mgr.mMaxLifeTime}
-	http.SetCookie(w, &cookie)
-
 	return session
 }
 
@@ -104,19 +103,21 @@ func (mgr *sessionmgr) GetSession(w http.ResponseWriter, r *http.Request) *Sessi
 	mgr.mLock.Lock()
 	defer mgr.mLock.Unlock()
 
-	var cookie, err = r.Cookie(mgr.mCookieName)
-	if cookie == nil || err != nil {
+	auth := r.Header.Get("Authorization")
+	if len(auth) <= 9 || strings.ToUpper(auth[0:10]) != "DSSESSION " {
 		return nil
 	}
 
-	sid := cookie.Value
+	decodeBytes, err := base64.StdEncoding.DecodeString(auth[10:])
+	if err != nil {
+		return nil
+	}
+	sid := string(decodeBytes)
 	session, ok := mgr.mSessions[sid]
 	if !ok {
 		return nil
 	}
 
 	session.mLastTimeAccessed = time.Now()
-	cookie.MaxAge = mgr.mMaxLifeTime
-	http.SetCookie(w, cookie)
 	return session
 }

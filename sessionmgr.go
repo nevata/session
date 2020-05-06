@@ -2,7 +2,10 @@ package session
 
 import (
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -11,17 +14,26 @@ import (
 	"time"
 )
 
+//PassportInfo OpenIDConnect
+type PassportInfo struct {
+	PassportID   string `json:"passport_id"`
+	IdentityType string `json:"identity_type"`
+	Identifier   string `json:"identifier"`
+}
+
 var ins *sessionmgr
 var once sync.Once
 
 type sessionmgr struct {
-	mLock        sync.RWMutex
-	mCookieName  string
-	mMaxLifeTime int //单位：秒
-	mSessions    map[string]*Session
+	mLock          sync.RWMutex
+	mCookieName    string
+	mMaxLifeTime   int //单位：秒
+	mSessions      map[string]*Session
+	OIDC           bool
+	AuthServerAddr string
 }
 
-// SessionMgr session管理器
+//SessionMgr session管理器
 func SessionMgr() *sessionmgr {
 	once.Do(func() {
 		ins = &sessionmgr{}
@@ -98,6 +110,31 @@ func (mgr *sessionmgr) StartSession(w http.ResponseWriter, r *http.Request, user
 	return session
 }
 
+func (mgr *sessionmgr) getOpenID(sid string) (*PassportInfo, error) {
+	req, err := http.NewRequest("GET", mgr.AuthServerAddr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "Bearer "+sid)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, errors.New(resp.Status)
+	}
+
+	var info PassportInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, err
+	}
+
+	return &info, nil
+}
+
 //GetSession 获取session，并更新最后访问时间
 func (mgr *sessionmgr) GetSession(w http.ResponseWriter, r *http.Request) *Session {
 	mgr.mLock.Lock()
@@ -115,7 +152,18 @@ func (mgr *sessionmgr) GetSession(w http.ResponseWriter, r *http.Request) *Sessi
 	sid := string(decodeBytes)
 	session, ok := mgr.mSessions[sid]
 	if !ok {
-		return nil
+		if mgr.OIDC {
+			info, err := mgr.getOpenID(sid)
+			if err != nil {
+				log.Println("get open id failed")
+				return nil
+			}
+			session = &Session{mSessionID: sid, mUserID: info.PassportID, mLastTimeAccessed: time.Now(), mValue: make(map[string]interface{})}
+			session.PutData("PassportInfo", info)
+			mgr.mSessions[sid] = session
+		} else {
+			return nil
+		}
 	}
 
 	session.mLastTimeAccessed = time.Now()

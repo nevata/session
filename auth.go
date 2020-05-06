@@ -23,7 +23,6 @@ func Auth(inner Handler) Handler {
 		sess := SessionMgr().GetSession(w, r)
 		if sess == nil {
 			w.WriteHeader(http.StatusUnauthorized)
-			//handlerError(w, fmt.Errorf("令牌无效！"))
 			return
 		}
 		inner.ServeHTTP(sess, w, r)

@@ -31,6 +31,7 @@ type sessionmgr struct {
 	mSessions      map[string]*Session
 	OIDC           bool
 	AuthServerAddr string
+	OnSave         func(sid, value string)
 }
 
 //SessionMgr session管理器
@@ -104,7 +105,13 @@ func (mgr *sessionmgr) StartSession(w http.ResponseWriter, r *http.Request, user
 	defer mgr.mLock.Unlock()
 
 	sid := url.QueryEscape(mgr.generateSessionID())
-	session := &Session{mSessionID: sid, mUserID: userID, mLastTimeAccessed: time.Now(), mValue: make(map[string]interface{})}
+	session := &Session{
+		mSessionID:        sid,
+		mUserID:           userID,
+		mLastTimeAccessed: time.Now(),
+		mValue:            make(map[string]interface{}),
+		mOnSave:           mgr.OnSave,
+	}
 	mgr.mSessions[sid] = session
 
 	return session
@@ -179,6 +186,7 @@ func (mgr *sessionmgr) NewSession(sid, userid, value string) *Session {
 		mUserID:           userid,
 		mLastTimeAccessed: time.Now(),
 		mValue:            make(map[string]interface{}),
+		mOnSave:           mgr.OnSave,
 	}
 
 	err := json.Unmarshal([]byte(value), &sess.mValue)

@@ -189,9 +189,11 @@ func (mgr *sessionmgr) NewSession(sid, userid, value string) *Session {
 		mOnSave:           mgr.OnSave,
 	}
 
-	err := json.Unmarshal([]byte(value), &sess.mValue)
-	if err != nil {
-		log.Println("[Session] new session error:", err)
+	if len(value) > 0 {
+		err := json.Unmarshal([]byte(value), &sess.mValue)
+		if err != nil {
+			log.Println("[Session] new session error:", err)
+		}
 	}
 
 	mgr.mSessions[sid] = &sess

@@ -119,6 +119,7 @@ func (mgr *sessionmgr) StartSession(w http.ResponseWriter, r *http.Request, user
 		mLastTimeAccessed: time.Now(),
 		mValue:            make(map[string]interface{}),
 		mOnSave:           mgr.OnSave,
+		mOnSaveGob:        mgr.OnSaveGob,
 	}
 	mgr.mSessions[sid] = session
 

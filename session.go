@@ -1,6 +1,8 @@
 package session
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"log"
 	"time"
@@ -13,6 +15,7 @@ type Session struct {
 	mLastTimeAccessed time.Time
 	mValue            map[string]interface{}
 	mOnSave           func(sid, value string)
+	mOnSaveGob        func(sid string, sdata []byte)
 }
 
 //HasData 查找数据
@@ -33,6 +36,9 @@ func (sess *Session) PutData(key string, value interface{}) {
 	if sess.mOnSave != nil {
 		sess.save()
 	}
+	if sess.mOnSaveGob != nil {
+		sess.saveGob()
+	}
 }
 
 //RemoveData 移除数据
@@ -40,6 +46,9 @@ func (sess *Session) RemoveData(key string) {
 	delete(sess.mValue, key)
 	if sess.mOnSave != nil {
 		sess.save()
+	}
+	if sess.mOnSaveGob != nil {
+		sess.saveGob()
 	}
 }
 
@@ -55,10 +64,30 @@ func (sess *Session) UserID() string {
 
 //save 数据持久化
 func (sess *Session) save() {
+	if sess.mOnSave == nil {
+		return
+	}
+
 	bs, err := json.Marshal(sess.mValue)
 	if err != nil {
 		log.Println("[session] save err", err)
 		return
 	}
+
 	sess.mOnSave(sess.mSessionID, string(bs))
+}
+
+func (sess *Session) saveGob() {
+	if sess.mOnSaveGob == nil {
+		return
+	}
+
+	var result bytes.Buffer
+	err := gob.NewEncoder(&result).Encode(sess.mValue)
+	if err != nil {
+		log.Println("[session] save gob err", err)
+		return
+	}
+
+	sess.mOnSaveGob(sess.mSessionID, result.Bytes())
 }

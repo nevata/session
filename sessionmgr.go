@@ -1,7 +1,9 @@
 package session
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,11 +34,14 @@ type sessionmgr struct {
 	OIDC           bool
 	AuthServerAddr string
 	OnSave         func(sid, value string)
+	OnSaveGob      func(sid string, sdata []byte)
+	OnTimeout      func(sid string)
 }
 
 //SessionMgr session管理器
 func SessionMgr() *sessionmgr {
 	once.Do(func() {
+		gob.Register(&time.Time{})
 		ins = &sessionmgr{}
 		ins.mCookieName = "sid"
 		ins.mMaxLifeTime = 3600
@@ -54,6 +59,9 @@ func (mgr *sessionmgr) gc() {
 
 	for sid, session := range mgr.mSessions {
 		if session.mLastTimeAccessed.Unix()+int64(mgr.mMaxLifeTime) < time.Now().Unix() {
+			if mgr.OnTimeout != nil {
+				mgr.OnTimeout(sid)
+			}
 			delete(mgr.mSessions, sid)
 		}
 	}
@@ -191,6 +199,29 @@ func (mgr *sessionmgr) NewSession(sid, userid, value string) *Session {
 
 	if len(value) > 0 {
 		err := json.Unmarshal([]byte(value), &sess.mValue)
+		if err != nil {
+			log.Println("[Session] new session error:", err)
+		}
+	}
+
+	mgr.mSessions[sid] = &sess
+
+	return &sess
+}
+
+func (mgr *sessionmgr) NewSessionGob(sid string, sdata []byte) *Session {
+	mgr.mLock.Lock()
+	defer mgr.mLock.Unlock()
+
+	sess := Session{
+		mSessionID:        sid,
+		mLastTimeAccessed: time.Now(),
+		mValue:            make(map[string]interface{}),
+		mOnSaveGob:        mgr.OnSaveGob,
+	}
+
+	if len(sdata) > 0 {
+		err := gob.NewDecoder(bytes.NewReader(sdata)).Decode(&sess.mValue)
 		if err != nil {
 			log.Println("[Session] new session error:", err)
 		}

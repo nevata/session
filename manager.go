@@ -17,10 +17,10 @@ import (
 // var once sync.Once
 
 type ManagerOption struct {
-	mMaxLifeTime int64 //单位：秒
-	mOnUpdate    func(sid string, t time.Time)
-	mOnSave      func(sid string, sdata []byte)
-	mOnTimeout   func(sid string)
+	MaxLifeTime int64 //单位：秒
+	OnUpdate    func(sid string, t time.Time)
+	OnSave      func(sid string, sdata []byte)
+	OnTimeout   func(sid string)
 }
 
 type Manager struct {
@@ -38,7 +38,7 @@ func NewManager(modOption ModManagerOption) *Manager {
 	})
 
 	option := ManagerOption{
-		mMaxLifeTime: 3600, //默认1小时
+		MaxLifeTime: 3600, //默认1小时
 	}
 
 	modOption(&option)
@@ -59,10 +59,10 @@ func (mgr *Manager) gc() {
 	defer mgr.mLock.Unlock()
 
 	for sid, sess := range mgr.mSessions {
-		timeout := sess.mLastTimeAccessed.Unix() + mgr.mOption.mMaxLifeTime
+		timeout := sess.mLastTimeAccessed.Unix() + mgr.mOption.MaxLifeTime
 		if timeout < time.Now().Unix() {
-			if mgr.mOption.mOnTimeout != nil {
-				mgr.mOption.mOnTimeout(sid)
+			if mgr.mOption.OnTimeout != nil {
+				mgr.mOption.OnTimeout(sid)
 			}
 			delete(mgr.mSessions, sid)
 		}
@@ -108,7 +108,7 @@ func (mgr *Manager) StartSession(w http.ResponseWriter, r *http.Request, userID 
 		mUserID:           userID,
 		mLastTimeAccessed: time.Now(),
 		mValue:            make(map[string]interface{}),
-		mOnSaveGob:        mgr.mOption.mOnSave,
+		mOnSaveGob:        mgr.mOption.OnSave,
 	}
 	mgr.mSessions[sid] = session
 
@@ -136,8 +136,8 @@ func (mgr *Manager) GetSession(w http.ResponseWriter, r *http.Request) *Session 
 	sess, ok := mgr.mSessions[sid]
 	if ok {
 		sess.mLastTimeAccessed = time.Now()
-		if mgr.mOption.mOnUpdate != nil {
-			mgr.mOption.mOnUpdate(sess.mSessionID, sess.mLastTimeAccessed)
+		if mgr.mOption.OnUpdate != nil {
+			mgr.mOption.OnUpdate(sess.mSessionID, sess.mLastTimeAccessed)
 		}
 	}
 
@@ -152,7 +152,7 @@ func (mgr *Manager) AddSession(sid string, sdata []byte) *Session {
 		mSessionID:        sid,
 		mLastTimeAccessed: time.Now(),
 		mValue:            make(map[string]interface{}),
-		mOnSaveGob:        mgr.mOption.mOnSave,
+		mOnSaveGob:        mgr.mOption.OnSave,
 	}
 
 	if len(sdata) > 0 {

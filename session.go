@@ -52,6 +52,12 @@ func (sess *Session) RemoveData(key string) {
 	}
 }
 
+//Close 关闭会话
+func (sess *Session) Close() {
+	mgr := sess.mManager
+	mgr.EndSession(sess.mSessionID)
+}
+
 //SessID sid
 func (sess *Session) SessID() string {
 	return sess.mSessionID

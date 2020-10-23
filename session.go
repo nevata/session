@@ -15,7 +15,7 @@ type Session struct {
 	mLastTimeAccessed time.Time
 	mValue            map[string]interface{}
 	mOnSave           func(sid, value string)
-	mOnSaveGob        func(sid string, sdata []byte)
+	mManager          *Manager
 }
 
 //HasData 查找数据
@@ -36,7 +36,7 @@ func (sess *Session) PutData(key string, value interface{}) {
 	if sess.mOnSave != nil {
 		sess.save()
 	}
-	if sess.mOnSaveGob != nil {
+	if sess.mManager != nil {
 		sess.saveGob()
 	}
 }
@@ -47,7 +47,7 @@ func (sess *Session) RemoveData(key string) {
 	if sess.mOnSave != nil {
 		sess.save()
 	}
-	if sess.mOnSaveGob != nil {
+	if sess.mManager != nil {
 		sess.saveGob()
 	}
 }
@@ -78,7 +78,7 @@ func (sess *Session) save() {
 }
 
 func (sess *Session) saveGob() {
-	if sess.mOnSaveGob == nil {
+	if sess.mManager.mOption.OnSave == nil {
 		return
 	}
 
@@ -89,5 +89,5 @@ func (sess *Session) saveGob() {
 		return
 	}
 
-	sess.mOnSaveGob(sess.mSessionID, result.Bytes())
+	sess.mManager.mOption.OnSave(sess.mSessionID, result.Bytes())
 }

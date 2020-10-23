@@ -119,7 +119,6 @@ func (mgr *sessionmgr) StartSession(w http.ResponseWriter, r *http.Request, user
 		mLastTimeAccessed: time.Now(),
 		mValue:            make(map[string]interface{}),
 		mOnSave:           mgr.OnSave,
-		mOnSaveGob:        mgr.OnSaveGob,
 	}
 	mgr.mSessions[sid] = session
 
@@ -218,13 +217,12 @@ func (mgr *sessionmgr) NewSessionGob(sid string, sdata []byte) *Session {
 		mSessionID:        sid,
 		mLastTimeAccessed: time.Now(),
 		mValue:            make(map[string]interface{}),
-		mOnSaveGob:        mgr.OnSaveGob,
 	}
 
 	if len(sdata) > 0 {
 		err := gob.NewDecoder(bytes.NewReader(sdata)).Decode(&sess.mValue)
 		if err != nil {
-			log.Println("[Session] new session error:", err)
+			log.Println("[Session] new session gob error:", err)
 		}
 	}
 

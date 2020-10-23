@@ -107,7 +107,7 @@ func (mgr *Manager) StartSession(w http.ResponseWriter, r *http.Request) *Sessio
 		mSessionID:        sid,
 		mLastTimeAccessed: time.Now(),
 		mValue:            make(map[string]interface{}),
-		mOnSaveGob:        mgr.mOption.OnSave,
+		mManager:          mgr,
 	}
 	mgr.mSessions[sid] = session
 
@@ -151,7 +151,7 @@ func (mgr *Manager) AddSession(sid string, sdata []byte) *Session {
 		mSessionID:        sid,
 		mLastTimeAccessed: time.Now(),
 		mValue:            make(map[string]interface{}),
-		mOnSaveGob:        mgr.mOption.OnSave,
+		mManager:          mgr,
 	}
 
 	if len(sdata) > 0 {

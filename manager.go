@@ -98,14 +98,13 @@ func (mgr *Manager) EndSession(sessionID string) {
 }
 
 //StartSession 创建session
-func (mgr *Manager) StartSession(w http.ResponseWriter, r *http.Request, userID string) *Session {
+func (mgr *Manager) StartSession(w http.ResponseWriter, r *http.Request) *Session {
 	mgr.mLock.Lock()
 	defer mgr.mLock.Unlock()
 
 	sid := url.QueryEscape(mgr.generateSessionID())
 	session := &Session{
 		mSessionID:        sid,
-		mUserID:           userID,
 		mLastTimeAccessed: time.Now(),
 		mValue:            make(map[string]interface{}),
 		mOnSaveGob:        mgr.mOption.OnSave,

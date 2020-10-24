@@ -18,8 +18,8 @@ func (f HandlerFunc) ServeHTTP(s *Session, w http.ResponseWriter, r *http.Reques
 }
 
 //Auth 令牌检查
-func Auth(inner Handler) Handler {
-	return HandlerFunc(func(s *Session, w http.ResponseWriter, r *http.Request) {
+func Auth(inner Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sess := SessionMgr().GetSession(w, r)
 		if sess == nil {
 			w.WriteHeader(http.StatusUnauthorized)

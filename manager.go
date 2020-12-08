@@ -16,21 +16,39 @@ import (
 
 // var once sync.Once
 
+//Flag 会话删除标识
+type Flag uint8
+
+const (
+	//FlagClose 正常退出
+	FlagClose Flag = iota + 1
+	//FlagErase 踢用户
+	FlagErase
+	//FlagTimeout 超时
+	FlagTimeout
+)
+
+//ManagerOption 会话管理参数
 type ManagerOption struct {
 	MaxLifeTime int64 //单位：秒
-	OnUpdate    func(sid string, t time.Time)
-	OnSave      func(sid string, sdata []byte)
-	OnTimeout   func(sid string)
+	Singled     bool  //一个用户是否可以同时登入,默认不允许
+	OnCreate    func(sid string, userid interface{}) error
+	OnUpdate    func(sid string, t time.Time) error
+	OnSave      func(sid string, sdata []byte) error
+	OnDelete    func(sid string, flag Flag) error
 }
 
+//Manager 会话管理
 type Manager struct {
 	mLock     sync.RWMutex
 	mSessions map[string]*Session
 	mOption   ManagerOption
 }
 
+//ModManagerOption 会话管理参数修改
 type ModManagerOption func(opt *ManagerOption)
 
+//NewManager 创建会话管理
 func NewManager(modOption ModManagerOption) *Manager {
 	once.Do(func() {
 		gob.Register(&time.Time{})
@@ -39,6 +57,7 @@ func NewManager(modOption ModManagerOption) *Manager {
 
 	option := ManagerOption{
 		MaxLifeTime: 3600, //默认1小时
+		Singled:     true,
 	}
 
 	modOption(&option)
@@ -53,7 +72,7 @@ func NewManager(modOption ModManagerOption) *Manager {
 	return &mgr
 }
 
-//gc 删除超时的session
+//gc 删除超时的会话
 func (mgr *Manager) gc() {
 	mgr.mLock.Lock()
 	defer mgr.mLock.Unlock()
@@ -61,8 +80,10 @@ func (mgr *Manager) gc() {
 	for sid, sess := range mgr.mSessions {
 		timeout := sess.mLastTimeAccessed.Unix() + mgr.mOption.MaxLifeTime
 		if timeout < time.Now().Unix() {
-			if mgr.mOption.OnTimeout != nil {
-				mgr.mOption.OnTimeout(sid)
+			if mgr.mOption.OnDelete != nil {
+				if err := mgr.mOption.OnDelete(sid, FlagTimeout); err != nil {
+					log.Println("[session]OnDelete failed, err: ", err)
+				}
 			}
 			delete(mgr.mSessions, sid)
 		}
@@ -89,27 +110,55 @@ func (mgr *Manager) generateSessionID() string {
 	return sid
 }
 
-//EndSessionBy 结束session
+//EndSession 结束会话
 func (mgr *Manager) EndSession(sessionID string) {
 	mgr.mLock.Lock()
 	defer mgr.mLock.Unlock()
 
+	if err := mgr.mOption.OnDelete(sessionID, FlagClose); err != nil {
+		log.Println("[session]OnDelete failed, err: ", err)
+	}
+
 	delete(mgr.mSessions, sessionID)
 }
 
+//eraseSession 结束用户会话(踢用户)
+func (mgr *Manager) eraseSession(userid interface{}) {
+	for k, v := range mgr.mSessions {
+		if v.mUserID == userid {
+			if err := mgr.mOption.OnDelete(k, FlagErase); err != nil {
+				log.Println("[session]OnDelete failed, err: ", err)
+			}
+			delete(mgr.mSessions, k)
+			return
+		}
+	}
+}
+
 //StartSession 创建session
-func (mgr *Manager) StartSession(w http.ResponseWriter, r *http.Request) *Session {
+func (mgr *Manager) StartSession(w http.ResponseWriter, r *http.Request, userid interface{}) *Session {
 	mgr.mLock.Lock()
 	defer mgr.mLock.Unlock()
+
+	if mgr.mOption.Singled {
+		mgr.eraseSession(userid)
+	}
 
 	sid := url.QueryEscape(mgr.generateSessionID())
 	session := &Session{
 		mSessionID:        sid,
+		mUserID:           userid,
 		mLastTimeAccessed: time.Now(),
 		mValue:            make(map[string]interface{}),
 		mManager:          mgr,
 	}
 	mgr.mSessions[sid] = session
+
+	if mgr.mOption.OnCreate != nil {
+		if err := mgr.mOption.OnCreate(sid, userid); err != nil {
+			log.Println("[session]OnCreate failed, err: ", err)
+		}
+	}
 
 	return session
 }
@@ -136,20 +185,31 @@ func (mgr *Manager) GetSession(w http.ResponseWriter, r *http.Request) *Session 
 	if ok {
 		sess.mLastTimeAccessed = time.Now()
 		if mgr.mOption.OnUpdate != nil {
-			mgr.mOption.OnUpdate(sess.mSessionID, sess.mLastTimeAccessed)
+			if err := mgr.mOption.OnUpdate(
+				sess.mSessionID,
+				sess.mLastTimeAccessed); err != nil {
+				log.Println("[session]OnUpdate failed, err: ", err)
+			}
 		}
 	}
 
 	return sess
 }
 
-func (mgr *Manager) AddSession(sid string, sdata []byte) *Session {
+//AddSession 添加持久化的会话
+func (mgr *Manager) AddSession(
+	sid string,
+	sdata []byte,
+	userid interface{},
+	lastTimeAccessed time.Time,
+) *Session {
 	mgr.mLock.Lock()
 	defer mgr.mLock.Unlock()
 
 	sess := Session{
 		mSessionID:        sid,
-		mLastTimeAccessed: time.Now(),
+		mUserID:           userid,
+		mLastTimeAccessed: lastTimeAccessed,
 		mValue:            make(map[string]interface{}),
 		mManager:          mgr,
 	}

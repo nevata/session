@@ -11,7 +11,7 @@ import (
 //Session session对象
 type Session struct {
 	mSessionID        string
-	mUserID           string
+	mUserID           interface{}
 	mLastTimeAccessed time.Time
 	mValue            map[string]interface{}
 	mOnSave           func(sid, value string)
@@ -64,7 +64,7 @@ func (sess *Session) SessID() string {
 }
 
 //UserID 用户ID
-func (sess *Session) UserID() string {
+func (sess *Session) UserID() interface{} {
 	return sess.mUserID
 }
 
@@ -95,5 +95,9 @@ func (sess *Session) saveGob() {
 		return
 	}
 
-	sess.mManager.mOption.OnSave(sess.mSessionID, result.Bytes())
+	if err := sess.mManager.mOption.OnSave(
+		sess.mSessionID,
+		result.Bytes()); err != nil {
+		log.Println("[session]OnSave failed, err:", err)
+	}
 }
